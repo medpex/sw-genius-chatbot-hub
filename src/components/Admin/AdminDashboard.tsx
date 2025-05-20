@@ -11,6 +11,7 @@ interface AdminDashboardProps {
 
 interface KnowledgeItem {
   id: number;
+
   question: string;
   answer: string;
   category: string;
@@ -19,6 +20,7 @@ interface KnowledgeItem {
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
   const [crawlUrl, setCrawlUrl] = useState('');
+
   const [serverUrl, setServerUrl] = useState('');
   const [model, setModel] = useState('');
   const [temperature, setTemperature] = useState(0.7);
@@ -43,6 +45,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       .then(res => res.json())
       .then(setModels)
       .catch(() => {});
+  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('ollamaUrl') || 'http://localhost:11434');
+  const [model, setModel] = useState(() => localStorage.getItem('ollamaModel') || 'Llama2');
+
+  useEffect(() => {
+    fetch('/api/knowledge')
+      .then((res) => res.json())
+      .then(setKnowledge)
+      .catch(() => {
+        // ignore errors in demo
+      });
   }, []);
 
   const handleCrawl = async () => {
@@ -70,6 +82,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     acc[item.category].push(item);
     return acc;
   }, {});
+  const updateItem = (index: number, item: KnowledgeItem) => {
+    setKnowledge((prev) => prev.map((it, i) => (i === index ? item : it)));
+  };
+
+  const deleteItem = (index: number) => {
+    setKnowledge((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveSettings = () => {
+    localStorage.setItem('ollamaUrl', serverUrl);
+    localStorage.setItem('ollamaModel', model);
+  };
+
+  const grouped = knowledge.reduce<Record<string, { item: KnowledgeItem; index: number }[]>>(
+    (acc, item, index) => {
+      acc[item.category] = acc[item.category] || [];
+      acc[item.category].push({ item, index });
+      return acc;
+    },
+    {}
+  );
+
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
@@ -148,6 +182,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                           onDelete={() =>
                             setKnowledge((prev) => prev.filter((p) => p.id !== it.id))
                           }
+                      {items.map(({ item, index }) => (
+                        <KnowledgeBaseItem
+                          key={index}
+                          item={item}
+                          index={index}
+                          onUpdate={updateItem}
+                          onDelete={deleteItem}
                         />
                       ))}
                     </div>
@@ -216,11 +257,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                           value={model}
                           onChange={(e) => setModel(e.target.value)}
                         >
+
                           {models.map((m) => (
                             <option key={m} value={m}>
                               {m}
                             </option>
                           ))}
+
+                          <option>Llama2</option>
+                          <option>Mistral</option>
+                          <option>Gemma</option>
                         </select>
                       </div>
                       <div className="space-y-2">
@@ -238,11 +284,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </div>
                   </div>
                 </div>
-                
+               
                 <div className="flex justify-end">
                   <Button className="bg-swg-blue hover:bg-swg-blue/90" onClick={handleSaveConfig}>
                     Speichern
                   </Button>
+                  <Button className="bg-swg-blue hover:bg-swg-blue/90" onClick={handleSaveSettings}>Speichern</Button>
                 </div>
               </CardContent>
             </Card>
@@ -255,6 +302,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
 const KnowledgeBaseItem: React.FC<{
   item: KnowledgeItem;
+
   onUpdate: (item: KnowledgeItem) => void;
   onDelete: () => void;
 }> = ({ item, onUpdate, onDelete }) => {
@@ -276,11 +324,38 @@ const KnowledgeBaseItem: React.FC<{
   const remove = async () => {
     await fetch(`/api/knowledge/${item.id}`, { method: 'DELETE' });
     onDelete();
+
+  index: number;
+  onUpdate: (index: number, item: KnowledgeItem) => void;
+  onDelete: (index: number) => void;
+}> = ({ item, index, onUpdate, onDelete }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [question, setQuestion] = useState(item.question);
+  const [answer, setAnswer] = useState(item.answer);
+  const [category, setCategory] = useState(item.category);
+
+  const save = async () => {
+    const newItem = { question, answer, category };
+    await fetch(`/api/knowledge/${index}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newItem)
+    });
+    onUpdate(index, newItem);
+    setIsEditing(false);
+  };
+
+  const remove = async () => {
+    await fetch(`/api/knowledge/${index}`, { method: 'DELETE' });
+    onDelete(index);
+
   };
 
   return (
     <div className="border rounded-lg p-4">
       {editing ? (
+      {isEditing ? (
+
         <div className="space-y-2">
           <input
             className="w-full p-2 border rounded"
@@ -295,6 +370,14 @@ const KnowledgeBaseItem: React.FC<{
           <div className="flex gap-2">
             <Button size="sm" onClick={save}>Speichern</Button>
             <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Abbrechen</Button>
+          <input
+            className="w-full p-2 border rounded"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={save}>Speichern</Button>
+            <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>Abbrechen</Button>
           </div>
         </div>
       ) : (
@@ -306,6 +389,7 @@ const KnowledgeBaseItem: React.FC<{
           <p className="text-sm text-gray-600">{item.answer}</p>
           <div className="flex gap-2 mt-3">
             <Button size="sm" variant="outline" className="text-xs" onClick={() => setEditing(true)}>Bearbeiten</Button>
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => setIsEditing(true)}>Bearbeiten</Button>
             <Button size="sm" variant="outline" className="text-xs text-red-500" onClick={remove}>Löschen</Button>
           </div>
         </>

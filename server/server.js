@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const dataPath = path.join(__dirname, 'data', 'knowledge.json');
+
 const configPath = path.join(__dirname, 'data', 'config.json');
 
 function loadConfig() {
@@ -18,11 +19,16 @@ function saveConfig(cfg) {
   fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
 }
 
+
 function loadKnowledge() {
   try {
     const raw = fs.readFileSync(dataPath, 'utf8');
+
     const list = JSON.parse(raw);
     return list.map((item, idx) => ({ id: item.id ?? idx + 1, ...item }));
+
+    return JSON.parse(raw);
+ main
   } catch (err) {
     return [];
   }
@@ -31,6 +37,7 @@ function loadKnowledge() {
 function saveKnowledge(data) {
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 }
+
 
 function parseBody(req) {
   return new Promise((resolve, reject) => {
@@ -46,6 +53,7 @@ function parseBody(req) {
   });
 }
 
+
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
@@ -56,7 +64,7 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  // --- Knowledge CRUD ---
+
   if (req.url === '/api/knowledge' && req.method === 'GET') {
     const data = loadKnowledge();
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -65,6 +73,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.url === '/api/knowledge' && req.method === 'POST') {
+
     parseBody(req)
       .then(body => {
         const data = loadKnowledge();
@@ -132,6 +141,62 @@ const server = http.createServer((req, res) => {
     const models = ['llama2', 'mistral', 'gemma'];
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(models));
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => {
+      try {
+        const item = JSON.parse(body);
+        const data = loadKnowledge();
+        data.push(item);
+        saveKnowledge(data);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(item));
+      } catch {
+        res.writeHead(400);
+        res.end('Invalid payload');
+      }
+    });
+    return;
+  }
+
+  const matchId = req.url.match(/^\/api\/knowledge\/(\d+)$/);
+  if (matchId && req.method === 'PUT') {
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => {
+      try {
+        const item = JSON.parse(body);
+        const data = loadKnowledge();
+        const idx = parseInt(matchId[1], 10);
+        if (data[idx]) {
+          data[idx] = item;
+          saveKnowledge(data);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(item));
+        } else {
+          res.writeHead(404);
+          res.end('Not found');
+        }
+      } catch {
+        res.writeHead(400);
+        res.end('Invalid payload');
+      }
+    });
+    return;
+  }
+
+  if (matchId && req.method === 'DELETE') {
+    const data = loadKnowledge();
+    const idx = parseInt(matchId[1], 10);
+    if (data[idx]) {
+      const removed = data.splice(idx, 1)[0];
+      saveKnowledge(data);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(removed));
+    } else {
+      res.writeHead(404);
+      res.end('Not found');
+    }
     return;
   }
 
@@ -153,16 +218,35 @@ const server = http.createServer((req, res) => {
         const nextId = data.reduce((m, it) => Math.max(m, it.id), 0) + 1;
         const qa = {
           id: nextId,
+
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      try {
+        const { url } = JSON.parse(body);
+        const qa = {
           question: `Beispiel Frage zu ${url}`,
           answer: `Beispiel Antwort generiert aus den Inhalten von ${url}.`,
           category: 'Allgemein'
         };
+
+        const data = loadKnowledge();
         data.push(qa);
         saveKnowledge(data);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(qa));
+
       })
       .catch(() => { res.writeHead(400); res.end('Invalid payload'); });
+
+      } catch (err) {
+        res.writeHead(400);
+        res.end('Invalid payload');
+      }
+    });
+ 
     return;
   }
 
@@ -173,4 +257,7 @@ const server = http.createServer((req, res) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+
+});
+
 });
