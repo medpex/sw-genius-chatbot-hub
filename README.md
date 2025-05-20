@@ -71,3 +71,20 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Backend API
+
+Ein kleiner Node.js-Server speichert die Fragen und Antworten und leitet Anfragen an einen Ollama-Server weiter. Starte ihn mit
+
+```sh
+npm run server
+```
+
+Der Server lauscht auf Port `3001` und bietet folgende Endpunkte:
+
+- `GET /api/knowledge` – Liste aller QA-Paare
+- `POST /api/crawl` – Simuliert das Crawlen eines Links und erzeugt ein Beispiel-QA-Paar
+- `GET /api/ask?q=Frage` – Fragt das Ollama-Modell unter Berücksichtigung der Wissensdatenbank
+- `GET /api/config` – Liefert die aktuelle Ollama-Konfiguration
+- `PUT /api/config` – Aktualisiert die Ollama-Konfiguration
+- `GET /api/models` – Gibt die auf dem Ollama-Server verfügbaren Modelle zurück
