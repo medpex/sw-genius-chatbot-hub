@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,42 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
+interface KnowledgeItem {
+  question: string;
+  answer: string;
+  category: string;
+}
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
+  const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+  const [crawlUrl, setCrawlUrl] = useState('');
+
+  useEffect(() => {
+    fetch('/api/knowledge')
+      .then((res) => res.json())
+      .then(setKnowledge)
+      .catch(() => {
+        // ignore errors in demo
+      });
+  }, []);
+
+  const handleCrawl = async () => {
+    if (!crawlUrl) return;
+    const res = await fetch('/api/crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: crawlUrl })
+    });
+    const qa = await res.json();
+    setKnowledge((prev) => [...prev, qa]);
+    setCrawlUrl('');
+  };
+
+  const grouped = knowledge.reduce<Record<string, KnowledgeItem[]>>((acc, item) => {
+    acc[item.category] = acc[item.category] || [];
+    acc[item.category].push(item);
+    return acc;
+  }, {});
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
@@ -64,23 +99,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <KnowledgeBaseItem
-                    question="Wie hoch sind die aktuellen Strompreise?"
-                    answer="Unsere aktuellen Strompreise finden Sie auf unserer Webseite unter 'Tarife'. Aktuell bieten wir einen Grundpreis ab 9,95€ pro Monat und einen Arbeitspreis ab 28,5 Cent pro kWh."
-                    category="Tarife"
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={crawlUrl}
+                    onChange={(e) => setCrawlUrl(e.target.value)}
+                    className="flex-1 p-2 border rounded"
+                    placeholder="Link zum Crawlen"
                   />
-                  <KnowledgeBaseItem
-                    question="Wann erhalte ich Glasfaser in meinem Wohngebiet?"
-                    answer="Wir bauen das Glasfasernetz in Geesthacht schrittweise aus. Auf unserer Webseite können Sie Ihre Adresse eingeben und die Verfügbarkeit prüfen."
-                    category="Glasfaser"
-                  />
-                  <KnowledgeBaseItem
-                    question="Wie kann ich Kontakt aufnehmen?"
-                    answer="Sie erreichen uns telefonisch unter 04152 / 929-0, per E-Mail an info@stadtwerke-geesthacht.de oder persönlich in unserem Kundenzentrum."
-                    category="Kontakt"
-                  />
+                  <Button onClick={handleCrawl}>Crawlen</Button>
                 </div>
+                {Object.entries(grouped).map(([cat, items]) => (
+                  <div key={cat} className="mb-6">
+                    <h3 className="font-medium mb-2">{cat}</h3>
+                    <div className="space-y-2">
+                      {items.map((it, idx) => (
+                        <KnowledgeBaseItem
+                          key={`${cat}-${idx}`}
+                          question={it.question}
+                          answer={it.answer}
+                          category={it.category}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
