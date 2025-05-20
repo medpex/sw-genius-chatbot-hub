@@ -1,0 +1,5 @@
+{
+  "serverUrl": "http://localhost:11434",
+  "model": "llama2",
+  "temperature": 0.7
+}

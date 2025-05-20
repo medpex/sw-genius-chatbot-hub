@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,8 @@ interface AdminDashboardProps {
 }
 
 interface KnowledgeItem {
+  id: number;
+
   question: string;
   answer: string;
   category: string;
@@ -17,6 +20,31 @@ interface KnowledgeItem {
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
   const [crawlUrl, setCrawlUrl] = useState('');
+
+  const [serverUrl, setServerUrl] = useState('');
+  const [model, setModel] = useState('');
+  const [temperature, setTemperature] = useState(0.7);
+  const [models, setModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/knowledge')
+      .then(res => res.json())
+      .then(setKnowledge)
+      .catch(() => {});
+
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(cfg => {
+        setServerUrl(cfg.serverUrl);
+        setModel(cfg.model);
+        setTemperature(cfg.temperature);
+      })
+      .catch(() => {});
+
+    fetch('/api/models')
+      .then(res => res.json())
+      .then(setModels)
+      .catch(() => {});
   const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('ollamaUrl') || 'http://localhost:11434');
   const [model, setModel] = useState(() => localStorage.getItem('ollamaModel') || 'Llama2');
 
@@ -41,6 +69,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     setCrawlUrl('');
   };
 
+  const handleSaveConfig = async () => {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverUrl, model, temperature })
+    });
+  };
+
+  const grouped = knowledge.reduce<Record<string, KnowledgeItem[]>>((acc, item) => {
+    acc[item.category] = acc[item.category] || [];
+    acc[item.category].push(item);
+    return acc;
+  }, {});
   const updateItem = (index: number, item: KnowledgeItem) => {
     setKnowledge((prev) => prev.map((it, i) => (i === index ? item : it)));
   };
@@ -131,6 +172,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                   <div key={cat} className="mb-6">
                     <h3 className="font-medium mb-2">{cat}</h3>
                     <div className="space-y-2">
+                      {items.map((it) => (
+                        <KnowledgeBaseItem
+                          key={it.id}
+                          item={it}
+                          onUpdate={(updated) =>
+                            setKnowledge((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+                          }
+                          onDelete={() =>
+                            setKnowledge((prev) => prev.filter((p) => p.id !== it.id))
+                          }
                       {items.map(({ item, index }) => (
                         <KnowledgeBaseItem
                           key={index}
@@ -206,6 +257,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                           value={model}
                           onChange={(e) => setModel(e.target.value)}
                         >
+
+                          {models.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+
                           <option>Llama2</option>
                           <option>Mistral</option>
                           <option>Gemma</option>
@@ -213,20 +271,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Temperatur</label>
-                        <input 
-                          type="range" 
-                          min="0" 
-                          max="1" 
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
                           step="0.1"
-                          defaultValue="0.7"
+                          value={temperature}
+                          onChange={(e) => setTemperature(parseFloat(e.target.value))}
                           className="w-full"
                         />
                       </div>
                     </div>
                   </div>
                 </div>
-                
+               
                 <div className="flex justify-end">
+                  <Button className="bg-swg-blue hover:bg-swg-blue/90" onClick={handleSaveConfig}>
+                    Speichern
+                  </Button>
                   <Button className="bg-swg-blue hover:bg-swg-blue/90" onClick={handleSaveSettings}>Speichern</Button>
                 </div>
               </CardContent>
@@ -240,6 +302,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
 const KnowledgeBaseItem: React.FC<{
   item: KnowledgeItem;
+
+  onUpdate: (item: KnowledgeItem) => void;
+  onDelete: () => void;
+}> = ({ item, onUpdate, onDelete }) => {
+  const [editing, setEditing] = useState(false);
+  const [question, setQuestion] = useState(item.question);
+  const [answer, setAnswer] = useState(item.answer);
+
+  const save = async () => {
+    const res = await fetch(`/api/knowledge/${item.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, answer })
+    });
+    const updated = await res.json();
+    onUpdate(updated);
+    setEditing(false);
+  };
+
+  const remove = async () => {
+    await fetch(`/api/knowledge/${item.id}`, { method: 'DELETE' });
+    onDelete();
+
   index: number;
   onUpdate: (index: number, item: KnowledgeItem) => void;
   onDelete: (index: number) => void;
@@ -263,11 +348,14 @@ const KnowledgeBaseItem: React.FC<{
   const remove = async () => {
     await fetch(`/api/knowledge/${index}`, { method: 'DELETE' });
     onDelete(index);
+
   };
 
   return (
     <div className="border rounded-lg p-4">
+      {editing ? (
       {isEditing ? (
+
         <div className="space-y-2">
           <input
             className="w-full p-2 border rounded"
@@ -279,6 +367,9 @@ const KnowledgeBaseItem: React.FC<{
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
           />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={save}>Speichern</Button>
+            <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Abbrechen</Button>
           <input
             className="w-full p-2 border rounded"
             value={category}
@@ -297,6 +388,7 @@ const KnowledgeBaseItem: React.FC<{
           </div>
           <p className="text-sm text-gray-600">{item.answer}</p>
           <div className="flex gap-2 mt-3">
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => setEditing(true)}>Bearbeiten</Button>
             <Button size="sm" variant="outline" className="text-xs" onClick={() => setIsEditing(true)}>Bearbeiten</Button>
             <Button size="sm" variant="outline" className="text-xs text-red-500" onClick={remove}>Löschen</Button>
           </div>

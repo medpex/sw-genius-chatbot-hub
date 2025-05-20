@@ -83,5 +83,15 @@ npm run server
 Der Server lauscht auf Port `3001` und bietet folgende Endpunkte:
 
 - `GET /api/knowledge` – Liste aller QA-Paare
+
+- `POST /api/knowledge` – Neues QA-Paar anlegen
+- `PUT /api/knowledge/:id` – QA-Paar aktualisieren
+- `DELETE /api/knowledge/:id` – QA-Paar löschen
 - `POST /api/crawl` – Simuliert das Crawlen eines Links und erzeugt ein Beispiel-QA-Paar
 - `GET /api/ask?q=Frage` – Liefert die passende Antwort aus der Wissensdatenbank
+- `GET /api/config` – Aktuelle Ollama-Konfiguration
+- `POST /api/config` – Konfiguration speichern
+- `GET /api/models` – Verfügbare Modelle (Beispieldaten)
+- `POST /api/crawl` – Simuliert das Crawlen eines Links und erzeugt ein Beispiel-QA-Paar
+- `GET /api/ask?q=Frage` – Liefert die passende Antwort aus der Wissensdatenbank
+
