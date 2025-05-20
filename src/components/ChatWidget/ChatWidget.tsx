@@ -44,47 +44,39 @@ const ChatWidget: React.FC = () => {
     }
   };
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       content,
       isUser: true,
       timestamp: new Date()
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
-    
-    // Simulate bot typing
+
     setIsTyping(true);
-    
-    // Simulate bot response after delay
-    setTimeout(() => {
-      setIsTyping(false);
-      
-      let botResponse = '';
-      
-      // Simple response logic based on keywords
-      if (content.toLowerCase().includes('strom') || content.toLowerCase().includes('strompreis')) {
-        botResponse = 'Unsere aktuellen Strompreise finden Sie auf unserer Webseite unter "Tarife". Aktuell bieten wir einen Grundpreis ab 9,95€ pro Monat und einen Arbeitspreis ab 28,5 Cent pro kWh.';
-      } else if (content.toLowerCase().includes('glasfaser')) {
-        botResponse = 'Wir bauen das Glasfasernetz in Geesthacht aus! Informieren Sie sich auf unserer Webseite über die Verfügbarkeit in Ihrem Wohngebiet und die aktuellen Angebote.';
-      } else if (content.toLowerCase().includes('kontakt')) {
-        botResponse = 'Sie erreichen uns telefonisch unter 04152 / 929-0, per E-Mail an info@stadtwerke-geesthacht.de oder persönlich in unserem Kundenzentrum in der Bergedorfer Str. 30-32.';
-      } else if (content.toLowerCase().includes('störung')) {
-        botResponse = 'Für Störungsmeldungen nutzen Sie bitte unsere 24/7-Hotline: 04152 / 929-200 oder das Kontaktformular auf unserer Webseite.';
-      } else {
-        botResponse = 'Vielen Dank für Ihre Anfrage. Möchten Sie mehr über unsere Strom- und Gastarife, Glasfaserangebote oder Serviceleistungen erfahren? Oder soll ich Sie mit einem Mitarbeiter verbinden?';
-      }
-      
+
+    try {
+      const res = await fetch(`/api/ask?q=${encodeURIComponent(content)}`);
+      const data = await res.json();
       const botMessage: Message = {
         id: `bot-${Date.now()}`,
-        content: botResponse,
+        content: data.answer,
         isUser: false,
         timestamp: new Date()
       };
-      
       setMessages(prev => [...prev, botMessage]);
-    }, 1500);
+    } catch {
+      const botMessage: Message = {
+        id: `bot-${Date.now()}`,
+        content: 'Entschuldigung, etwas ist schief gelaufen.',
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMessage]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   useEffect(() => {
