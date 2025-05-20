@@ -71,3 +71,17 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Backend API
+
+Ein einfacher Node.js-Server speichert die Fragen und Antworten. Starte ihn mit
+
+```sh
+npm run server
+```
+
+Der Server lauscht auf Port `3001` und bietet folgende Endpunkte:
+
+- `GET /api/knowledge` – Liste aller QA-Paare
+- `POST /api/crawl` – Simuliert das Crawlen eines Links und erzeugt ein Beispiel-QA-Paar
+- `GET /api/ask?q=Frage` – Liefert die passende Antwort aus der Wissensdatenbank

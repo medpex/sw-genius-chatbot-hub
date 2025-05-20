@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,60 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
+interface KnowledgeItem {
+  question: string;
+  answer: string;
+  category: string;
+}
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
+  const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('ollamaUrl') || 'http://localhost:11434');
+  const [model, setModel] = useState(() => localStorage.getItem('ollamaModel') || 'Llama2');
+
+  useEffect(() => {
+    fetch('/api/knowledge')
+      .then((res) => res.json())
+      .then(setKnowledge)
+      .catch(() => {
+        // ignore errors in demo
+      });
+  }, []);
+
+  const handleCrawl = async () => {
+    if (!crawlUrl) return;
+    const res = await fetch('/api/crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: crawlUrl })
+    });
+    const qa = await res.json();
+    setKnowledge((prev) => [...prev, qa]);
+    setCrawlUrl('');
+  };
+
+  const updateItem = (index: number, item: KnowledgeItem) => {
+    setKnowledge((prev) => prev.map((it, i) => (i === index ? item : it)));
+  };
+
+  const deleteItem = (index: number) => {
+    setKnowledge((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveSettings = () => {
+    localStorage.setItem('ollamaUrl', serverUrl);
+    localStorage.setItem('ollamaModel', model);
+  };
+
+  const grouped = knowledge.reduce<Record<string, { item: KnowledgeItem; index: number }[]>>(
+    (acc, item, index) => {
+      acc[item.category] = acc[item.category] || [];
+      acc[item.category].push({ item, index });
+      return acc;
+    },
+    {}
+  );
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
@@ -64,23 +117,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <KnowledgeBaseItem
-                    question="Wie hoch sind die aktuellen Strompreise?"
-                    answer="Unsere aktuellen Strompreise finden Sie auf unserer Webseite unter 'Tarife'. Aktuell bieten wir einen Grundpreis ab 9,95€ pro Monat und einen Arbeitspreis ab 28,5 Cent pro kWh."
-                    category="Tarife"
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={crawlUrl}
+                    onChange={(e) => setCrawlUrl(e.target.value)}
+                    className="flex-1 p-2 border rounded"
+                    placeholder="Link zum Crawlen"
                   />
-                  <KnowledgeBaseItem
-                    question="Wann erhalte ich Glasfaser in meinem Wohngebiet?"
-                    answer="Wir bauen das Glasfasernetz in Geesthacht schrittweise aus. Auf unserer Webseite können Sie Ihre Adresse eingeben und die Verfügbarkeit prüfen."
-                    category="Glasfaser"
-                  />
-                  <KnowledgeBaseItem
-                    question="Wie kann ich Kontakt aufnehmen?"
-                    answer="Sie erreichen uns telefonisch unter 04152 / 929-0, per E-Mail an info@stadtwerke-geesthacht.de oder persönlich in unserem Kundenzentrum."
-                    category="Kontakt"
-                  />
+                  <Button onClick={handleCrawl}>Crawlen</Button>
                 </div>
+                {Object.entries(grouped).map(([cat, items]) => (
+                  <div key={cat} className="mb-6">
+                    <h3 className="font-medium mb-2">{cat}</h3>
+                    <div className="space-y-2">
+                      {items.map(({ item, index }) => (
+                        <KnowledgeBaseItem
+                          key={index}
+                          item={item}
+                          index={index}
+                          onUpdate={updateItem}
+                          onDelete={deleteItem}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
@@ -130,15 +192,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Server URL</label>
-                        <input 
-                          type="text" 
-                          defaultValue="http://localhost:11434"
+                        <input
+                          type="text"
+                          value={serverUrl}
+                          onChange={(e) => setServerUrl(e.target.value)}
                           className="w-full p-2 border rounded"
                         />
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Modell</label>
-                        <select className="w-full p-2 border rounded">
+                        <select
+                          className="w-full p-2 border rounded"
+                          value={model}
+                          onChange={(e) => setModel(e.target.value)}
+                        >
                           <option>Llama2</option>
                           <option>Mistral</option>
                           <option>Gemma</option>
@@ -160,7 +227,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </div>
                 
                 <div className="flex justify-end">
-                  <Button className="bg-swg-blue hover:bg-swg-blue/90">Speichern</Button>
+                  <Button className="bg-swg-blue hover:bg-swg-blue/90" onClick={handleSaveSettings}>Speichern</Button>
                 </div>
               </CardContent>
             </Card>
@@ -172,21 +239,69 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 };
 
 const KnowledgeBaseItem: React.FC<{
-  question: string;
-  answer: string;
-  category: string;
-}> = ({ question, answer, category }) => {
+  item: KnowledgeItem;
+  index: number;
+  onUpdate: (index: number, item: KnowledgeItem) => void;
+  onDelete: (index: number) => void;
+}> = ({ item, index, onUpdate, onDelete }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [question, setQuestion] = useState(item.question);
+  const [answer, setAnswer] = useState(item.answer);
+  const [category, setCategory] = useState(item.category);
+
+  const save = async () => {
+    const newItem = { question, answer, category };
+    await fetch(`/api/knowledge/${index}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newItem)
+    });
+    onUpdate(index, newItem);
+    setIsEditing(false);
+  };
+
+  const remove = async () => {
+    await fetch(`/api/knowledge/${index}`, { method: 'DELETE' });
+    onDelete(index);
+  };
+
   return (
     <div className="border rounded-lg p-4">
-      <div className="flex justify-between items-start mb-2">
-        <h4 className="font-medium">{question}</h4>
-        <span className="bg-gray-100 text-xs px-2 py-1 rounded">{category}</span>
-      </div>
-      <p className="text-sm text-gray-600">{answer}</p>
-      <div className="flex gap-2 mt-3">
-        <Button size="sm" variant="outline" className="text-xs">Bearbeiten</Button>
-        <Button size="sm" variant="outline" className="text-xs text-red-500">Löschen</Button>
-      </div>
+      {isEditing ? (
+        <div className="space-y-2">
+          <input
+            className="w-full p-2 border rounded"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+          />
+          <textarea
+            className="w-full p-2 border rounded"
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+          />
+          <input
+            className="w-full p-2 border rounded"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={save}>Speichern</Button>
+            <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>Abbrechen</Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="font-medium">{item.question}</h4>
+            <span className="bg-gray-100 text-xs px-2 py-1 rounded">{item.category}</span>
+          </div>
+          <p className="text-sm text-gray-600">{item.answer}</p>
+          <div className="flex gap-2 mt-3">
+            <Button size="sm" variant="outline" className="text-xs" onClick={() => setIsEditing(true)}>Bearbeiten</Button>
+            <Button size="sm" variant="outline" className="text-xs text-red-500" onClick={remove}>Löschen</Button>
+          </div>
+        </>
+      )}
     </div>
   );
 };
