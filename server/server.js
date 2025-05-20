@@ -19,7 +19,7 @@ function saveKnowledge(data) {
 
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
@@ -31,6 +31,66 @@ const server = http.createServer((req, res) => {
     const data = loadKnowledge();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(data));
+    return;
+  }
+
+  if (req.url === '/api/knowledge' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => {
+      try {
+        const item = JSON.parse(body);
+        const data = loadKnowledge();
+        data.push(item);
+        saveKnowledge(data);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(item));
+      } catch {
+        res.writeHead(400);
+        res.end('Invalid payload');
+      }
+    });
+    return;
+  }
+
+  const matchId = req.url.match(/^\/api\/knowledge\/(\d+)$/);
+  if (matchId && req.method === 'PUT') {
+    let body = '';
+    req.on('data', chunk => (body += chunk));
+    req.on('end', () => {
+      try {
+        const item = JSON.parse(body);
+        const data = loadKnowledge();
+        const idx = parseInt(matchId[1], 10);
+        if (data[idx]) {
+          data[idx] = item;
+          saveKnowledge(data);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(item));
+        } else {
+          res.writeHead(404);
+          res.end('Not found');
+        }
+      } catch {
+        res.writeHead(400);
+        res.end('Invalid payload');
+      }
+    });
+    return;
+  }
+
+  if (matchId && req.method === 'DELETE') {
+    const data = loadKnowledge();
+    const idx = parseInt(matchId[1], 10);
+    if (data[idx]) {
+      const removed = data.splice(idx, 1)[0];
+      saveKnowledge(data);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(removed));
+    } else {
+      res.writeHead(404);
+      res.end('Not found');
+    }
     return;
   }
 
